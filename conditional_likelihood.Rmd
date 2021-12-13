@@ -1,0 +1,119 @@
+---
+title: "Mafods HW 3, Ques 3, parts 3 and 4"
+output: html_notebook
+---
+
+
+```{r}
+library(matrixStats)
+library(ggplot2)
+```
+
+<h4>Computing Point-wise Conditional Likelihoods</h4>
+```{r}
+compute_likelihoods <- function(sample_data) {
+  
+  sample_size <- length(sample_data)
+  
+  likelihoods <- matrix(0, nrow = sample_size, ncol = 2)
+  
+  # With original scheme [0.5 * N(0, 1) + 0.5 * N(0,9)]
+  likelihoods[, 1] <- 0.5 * dnorm(sample_data, mean = 0, sd = 1) + 0.5 * dnorm(sample_data, mean = 0, sd = 3)
+  
+  # With N(0, 5)
+  likelihoods[, 2] <- dnorm(sample_data, mean = 0, sd = sqrt(5))
+  
+  return(likelihoods)
+}
+```
+<h4>Generate Sample Data</h4>
+```{r}
+generate_sample_data <- function(sample_size, natural_priors, distribution_name) {
+  
+  if (distribution_name == "original_scheme") {
+    random_vector <- runif(sample_size, 0, 1)
+    num_elements_from_dist1 <- length(random_vector[random_vector <= 0.5])
+    num_elements_from_dist2 <- length(random_vector[random_vector > 0.5])
+  
+    sample_data1 <- rnorm(num_elements_from_dist1, mean = 0, sd = 1) # 50% of the time, draw sample from N(0, 1)
+    sample_data2 <- rnorm(sample_size - num_elements_from_dist1, mean = 0, sd = 3) # 50% of the time, draw sample from N(0, 9)
+  
+    sample_data <- c(sample_data1, sample_data2)
+  } else if (distribution_name == "N(0,5)") {
+    
+    sample_data <- rnorm(sample_size, mean = 0, sd = sqrt(5))
+    
+  } else {
+    print("Error: Invalid distribution name")
+  }
+  
+  return(sample_data)
+}
+```
+<h4>Generate Plot Data</h4>
+```{r}
+generate_plot_data <- function(min_sample_size, max_sample_size, no_of_experiments, natural_priors, distribution_name) {
+  plot_data <- matrix(data = NA, nrow = max_sample_size - min_sample_size + 1, ncol = 3)
+  plot_data[, 1] <- seq(min_sample_size:max_sample_size)
+  
+  for(sample_size in min_sample_size:max_sample_size) {
+    
+    original_scheme_conditional_likelihood <- matrix(data = NA, nrow = no_of_experiments, ncol = 1)
+    N_0_5_conditional_likelihood <- matrix(data = NA, nrow = no_of_experiments, ncol = 1)
+  
+      for(i in 1:no_of_experiments) {
+      sample_data <- generate_sample_data(sample_size, natural_priors, distribution_name)
+    
+      likelihoods <- compute_likelihoods(sample_data)
+    
+      original_scheme_likelihood <- colProds(likelihoods)[1]
+      N_0_5_likelihood <- colProds(likelihoods)[2]
+      
+      original_scheme_conditional_likelihood[i] <- original_scheme_likelihood * natural_priors[1] / (original_scheme_likelihood * natural_priors[1] + N_0_5_likelihood * natural_priors[2]) # original scheme condtional likelihood
+      
+      N_0_5_conditional_likelihood[i] <- N_0_5_likelihood * natural_priors[2]/ (original_scheme_likelihood * natural_priors[1] + N_0_5_likelihood * natural_priors[2]) # N(0, 5) conditional likelihood
+      
+      plot_data[sample_size - min_sample_size + 1, 2] <- mean(original_scheme_conditional_likelihood) # Average over experiments
+      plot_data[sample_size - min_sample_size + 1, 3] <- mean(N_0_5_conditional_likelihood) # Average over experiments
+    }
+  }
+  
+  return(plot_data)
+}
+```
+Generate Plot for Original Scheme
+```{r}
+natural_priors <- c(0.5, 0.5) # P(Z = 0), P(Z = 1) [Z = 0: original scheme; Z = 1: N(0,5)]
+min_sample_size <- 5
+max_sample_size <- 200
+no_of_experiments <- 50
+distribution_name <- "original_scheme"
+
+plot_data.df <- as.data.frame(generate_plot_data(min_sample_size, max_sample_size, no_of_experiments, natural_priors, distribution_name))
+colnames(plot_data.df) <- c("Sample_size", "Original_Scheme_Likelihood", "N_0_5_Likelihood")
+
+confidence_threshold = 0.95
+last_unsure_sample <- max(which(plot_data.df$Original_Scheme_Likelihood < confidence_threshold))
+print(paste("95% confidence reached at sample size ", plot_data.df$Sample_size[last_unsure_sample + 1]))
+
+ggplot(data = plot_data.df, aes(x = Sample_size, y = Original_Scheme_Likelihood)) +
+  geom_line()
+```
+Generate Plot for N(0, 5)
+```{r}
+natural_priors <- c(0.5, 0.5) # P(Z = 0), P(Z = 1) [Z = 0: original scheme; Z = 1: N(0,5)]
+min_sample_size <- 5
+max_sample_size <- 200
+no_of_experiments <- 50
+distribution_name <- "N(0,5)"
+
+plot_data.df <- as.data.frame(generate_plot_data(min_sample_size, max_sample_size, no_of_experiments, natural_priors, distribution_name))
+colnames(plot_data.df) <- c("Sample_size", "Original_Scheme_Likelihood", "N_0_5_Likelihood")
+
+confidence_threshold = 0.95
+last_unsure_sample <- max(which(plot_data.df$N_0_5_Likelihood < confidence_threshold))
+print(paste("95% confidence reached at sample size ", plot_data.df$Sample_size[last_unsure_sample + 1]))
+
+ggplot(data = plot_data.df, aes(x = Sample_size, y = N_0_5_Likelihood)) +
+  geom_line()
+```
